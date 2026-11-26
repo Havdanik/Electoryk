@@ -84,8 +84,14 @@ jobs:
               ('int elems=1;for(int v:os)elems*=Math.max(1,v);int bytes=bytesPer(outT.dataType());if(bytes<=0)return null;','int bytes=bytesPer(outT.dataType());if(bytes<=0)return null;\n        int totalBytes=outT.numBytes();if(totalBytes<=0||totalBytes>128*1024*1024||totalBytes%bytes!=0)return null;\n        int elems=totalBytes/bytes;'),
               ('float v=readAsFloat(output,dt);if(v>bv){bv=v;best=c;}','float v=readAsFloat(output,dt);if(Float.isFinite(v)&&v>bv){bv=v;best=c;}'),
               ('dense[p]=best;','dense[p]=bv==-Float.MAX_VALUE?(loadedFlavor==SemanticModelManager.Flavor.ML_PERF_32?31:0):best;')])
+          edit('semantic/SemanticModelManager.java',[
+              ('error="full ADE20K model unavailable; using 32-class fallback";','error="full ADE20K model unavailable: "+fullErr+"; using 32-class fallback";'),
+              ('c.setRequestProperty("User-Agent","ElektorykScan/0.19");c.connect();','c.setRequestProperty("User-Agent","ElektorykScan/0.29");\n        c.setRequestProperty("Accept","application/octet-stream, */*");c.connect();'),
+              ('int code=c.getResponseCode();if(code<200||code>=300)throw new IllegalStateException("HTTP "+code);','int code=c.getResponseCode();if(code<200||code>=300){c.disconnect();throw new IllegalStateException("HTTP "+code);}\n        String type=c.getContentType();\n        if(type!=null&&type.toLowerCase(java.util.Locale.ROOT).contains("text/html")){c.disconnect();throw new IllegalStateException("Model endpoint returned HTML instead of TFLite");}'),
+              ('}finally{c.disconnect();}','}catch(Exception e){tmp.delete();throw e;}finally{c.disconnect();}'),
+              ('if(in.read(h)!=8)return false;','new java.io.DataInputStream(in).readFully(h);')])
           p=Path('app/build.gradle')
-          s=p.read_text().replace('versionCode 132','versionCode 135').replace('0.29.1-bounded-semantic-finalization','0.29.4-tensor-validation')
+          s=p.read_text().replace('versionCode 132','versionCode 136').replace('0.29.1-bounded-semantic-finalization','0.29.5-model-provisioning')
           p.write_text(s)
           PY
       - name: Install required Android SDK packages
