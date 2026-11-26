@@ -78,8 +78,14 @@ jobs:
               ('SemanticLabel.fromModelIndex(best,loadedFlavor),share','SemanticLabel.fromModelIndex(best,loadedFlavor)==SemanticLabel.OBJECT?SemanticLabel.UNKNOWN:SemanticLabel.fromModelIndex(best,loadedFlavor),share')])
           edit('ui/ArCoreScanActivity.java',[
               ('ai="AI"+modelTag+": "+sem.lookingAt.ua+" "+Math.round(sem.lookingAtShare*100f)+"%"+dims+" • об\'єктів "+sem.entities;','ai="AI"+modelTag+": "+sem.lookingAt.ua+" • частка маски "+Math.round(sem.lookingAtShare*100f)+"%"+dims+" • сутностей "+sem.entities+(modelTag.equals("32")?" • обмежені класи":"");')])
+          edit('semantic/IndoorSemanticSegmenter.java',[
+              ('interpreter=new Interpreter(map,opt);loadedFile=model;loadedFlavor=flavor;return true;','interpreter=new Interpreter(map,opt);\n            interpreter.allocateTensors();\n            Tensor it=interpreter.getInputTensor(0),ot=interpreter.getOutputTensor(0);\n            int[] a=it.shape(),b=ot.shape();\n            if(a.length!=4||a[0]!=1||a[3]!=3||a[1]<=0||a[2]<=0||a[1]>2048||a[2]>2048||it.dataType()!=DataType.FLOAT32)throw new IllegalArgumentException("Unsupported RGB tensor");\n            if(b.length<3||b.length>4||b[0]!=1||b[1]<=0||b[2]<=0||ot.numBytes()<=0||ot.numBytes()>128*1024*1024)throw new IllegalArgumentException("Unsupported output tensor");\n            if(b.length==4&&b[3]!=1&&b[3]!=(flavor==SemanticModelManager.Flavor.ML_PERF_32?32:151))throw new IllegalArgumentException("Unexpected class count");\n            loadedFile=model;loadedFlavor=flavor;return true;'),
+              ('}catch(Throwable t){close();return false;}','}catch(Throwable t){android.util.Log.e("ElektorykSemantic","Model initialization failed: "+flavor,t);close();return false;}'),
+              ('int elems=1;for(int v:os)elems*=Math.max(1,v);int bytes=bytesPer(outT.dataType());if(bytes<=0)return null;','int bytes=bytesPer(outT.dataType());if(bytes<=0)return null;\n        int totalBytes=outT.numBytes();if(totalBytes<=0||totalBytes>128*1024*1024||totalBytes%bytes!=0)return null;\n        int elems=totalBytes/bytes;'),
+              ('float v=readAsFloat(output,dt);if(v>bv){bv=v;best=c;}','float v=readAsFloat(output,dt);if(Float.isFinite(v)&&v>bv){bv=v;best=c;}'),
+              ('dense[p]=best;','dense[p]=bv==-Float.MAX_VALUE?(loadedFlavor==SemanticModelManager.Flavor.ML_PERF_32?31:0):best;')])
           p=Path('app/build.gradle')
-          s=p.read_text().replace('versionCode 132','versionCode 134').replace('0.29.1-bounded-semantic-finalization','0.29.3-semantic-evidence')
+          s=p.read_text().replace('versionCode 132','versionCode 135').replace('0.29.1-bounded-semantic-finalization','0.29.4-tensor-validation')
           p.write_text(s)
           PY
       - name: Install required Android SDK packages
