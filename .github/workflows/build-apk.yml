@@ -100,8 +100,13 @@ jobs:
               ('if(!isValidTflite(fallbackFile)){','if(!fallbackRejected&&!isValidTflite(fallbackFile)){')])
           edit('semantic/IndoorSemanticSystem.java',[
               ('if(!segmenter.ensureLoaded(models.file(),models.flavor())){if(submitGeneration==generation.get())consecutiveInferenceFailures++;return;}','java.io.File model; SemanticModelManager.Flavor selected;\n                synchronized(models){model=models.file();selected=models.flavor();}\n                if(!segmenter.ensureLoaded(model,selected)){\n                    if(selected!=SemanticModelManager.Flavor.NONE){models.reject(selected);models.ensureAsync();}\n                    if(submitGeneration==generation.get())consecutiveInferenceFailures++;return;\n                }')])
+          edit('semantic/SemanticSceneTracker.java',[
+              ('if(frame==null||meta==null)return;','if(frame==null||meta==null||frame.labels==null||frame.width<=0||frame.height<=0||frame.sourceWidth<=0||frame.sourceHeight<=0||(long)frame.width*frame.height!=frame.labels.length||frame.labels.length>1000000)return;\n        if(meta.width<=0||meta.height<=0||!finite(meta.fx)||!finite(meta.fy)||!finite(meta.cx)||!finite(meta.cy)||meta.fx<=0||meta.fy<=0)return;'),
+              ('if(ev.timestampNs>0&&meta.timestampNs>0&&Math.abs(ev.timestampNs-meta.timestampNs)>350_000_000L)return;','if(ev.timestampNs>0&&meta.timestampNs>0&&Math.abs(ev.timestampNs-meta.timestampNs)>150_000_000L)return;'),
+              ('int mx=frame.maskX(u),my=frame.maskY(v),','int mx=frame.maskX(u*frame.sourceWidth/meta.width),my=frame.maskY(v*frame.sourceHeight/meta.height),'),
+              ('if(lab==SemanticLabel.UNKNOWN||lab==SemanticLabel.PERSON){ids[i]=-2;continue;}','if(lab==SemanticLabel.UNKNOWN||lab==SemanticLabel.PERSON||lab==SemanticLabel.OBJECT){ids[i]=-2;continue;}')])
           p=Path('app/build.gradle')
-          s=p.read_text().replace('versionCode 132','versionCode 137').replace('0.29.1-bounded-semantic-finalization','0.29.6-model-failover')
+          s=p.read_text().replace('versionCode 132','versionCode 138').replace('0.29.1-bounded-semantic-finalization','0.29.7-semantic-registration')
           p.write_text(s)
           PY
       - name: Install required Android SDK packages
