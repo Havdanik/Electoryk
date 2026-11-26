@@ -90,8 +90,18 @@ jobs:
               ('int code=c.getResponseCode();if(code<200||code>=300)throw new IllegalStateException("HTTP "+code);','int code=c.getResponseCode();if(code<200||code>=300){c.disconnect();throw new IllegalStateException("HTTP "+code);}\n        String type=c.getContentType();\n        if(type!=null&&type.toLowerCase(java.util.Locale.ROOT).contains("text/html")){c.disconnect();throw new IllegalStateException("Model endpoint returned HTML instead of TFLite");}'),
               ('}finally{c.disconnect();}','}catch(Exception e){tmp.delete();throw e;}finally{c.disconnect();}'),
               ('if(in.read(h)!=8)return false;','new java.io.DataInputStream(in).readFully(h);')])
+          edit('semantic/SemanticModelManager.java',[
+              ('private volatile boolean closed;','private volatile boolean closed;\n    private volatile boolean fullRejected,fallbackRejected;\n    public synchronized void reject(Flavor failed){\n        if(failed==Flavor.TF_DEEPLAB_ADE151)fullRejected=true;\n        if(failed==Flavor.ML_PERF_32)fallbackRejected=true;\n        refreshActive();\n        error="Interpreter rejected "+failed+"; active="+flavor;\n        if(flavor==Flavor.NONE)state=State.ERROR;\n    }'),
+              ('if(isValidTflite(fullFile)){flavor=','if(!fullRejected&&isValidTflite(fullFile)){flavor='),
+              ('if(isValidTflite(fallbackFile)){flavor=','if(!fallbackRejected&&isValidTflite(fallbackFile)){flavor='),
+              ('if(closed||flavor==Flavor.TF_DEEPLAB_ADE151||downloading)return;','if(closed||flavor==Flavor.TF_DEEPLAB_ADE151||downloading||(fullRejected&&fallbackRejected))return;'),
+              ('downloadModel(FULL_MODEL_URL,fullFile);','if(!fullRejected)downloadModel(FULL_MODEL_URL,fullFile);'),
+              ('if(!isValidTflite(fullFile)){','if(fullRejected||!isValidTflite(fullFile)){'),
+              ('if(!isValidTflite(fallbackFile)){','if(!fallbackRejected&&!isValidTflite(fallbackFile)){')])
+          edit('semantic/IndoorSemanticSystem.java',[
+              ('if(!segmenter.ensureLoaded(models.file(),models.flavor())){if(submitGeneration==generation.get())consecutiveInferenceFailures++;return;}','java.io.File model; SemanticModelManager.Flavor selected;\n                synchronized(models){model=models.file();selected=models.flavor();}\n                if(!segmenter.ensureLoaded(model,selected)){\n                    if(selected!=SemanticModelManager.Flavor.NONE){models.reject(selected);models.ensureAsync();}\n                    if(submitGeneration==generation.get())consecutiveInferenceFailures++;return;\n                }')])
           p=Path('app/build.gradle')
-          s=p.read_text().replace('versionCode 132','versionCode 136').replace('0.29.1-bounded-semantic-finalization','0.29.5-model-provisioning')
+          s=p.read_text().replace('versionCode 132','versionCode 137').replace('0.29.1-bounded-semantic-finalization','0.29.6-model-failover')
           p.write_text(s)
           PY
       - name: Install required Android SDK packages
