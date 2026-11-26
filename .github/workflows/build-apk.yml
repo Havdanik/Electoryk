@@ -64,6 +64,10 @@ jobs:
               ('if(heldReady)\n                    scanButton.setText("Завершити • стабільний скан ✓");','if(heldReady){\n                    progress.setProgress(100);\n                    hint.setText("Скан готовий до аналізу. Можна завершувати.");\n                    scanButton.setText("Завершити • стабільний скан ✓");\n                }'),
               ('"Завершити скан і проаналізувати");\n            });','"Доскануй • або завершити чернетку");\n            });'),
               ('}catch(Exception e){\n            runOnUiThread(() -> {if(!activityDestroyed&&!isFinishing()&&!isDestroyed())status.setText("AR frame error: "+e.getClass().getSimpleName());});','}catch(Exception e){\n            android.util.Log.e("ElektorykScan","AR frame processing failed",e);\n            runOnUiThread(() -> {if(!activityDestroyed&&!isFinishing()&&!isDestroyed())status.setText("AR frame error: "+e.getClass().getSimpleName());});')])
+          edit('scanner/ar/DepthSurfaceTracker.java',[
+              ('return refine(xyz,idx,m,cameraY);','Fit result=refine(xyz,idx,m,cameraY);\n        if(result!=null)return result;\n        // Reject only this candidate, not the remaining frame. Bound retries.\n        for(int ii=0;ii<m;ii++)available[idx[ii]]=false;\n        return pass<MAX_PLANES_PER_FRAME+2?fitBest(xyz,n,available,cameraY,frameId,pass+1):null;'),
+              ('if(ev==null||ev.localXyz==null||ev.pointCount<MIN_FRAME_INLIERS)return;','if(ev==null||ev.localXyz==null||ev.pointCount<MIN_FRAME_INLIERS)return;\n        if(!Float.isFinite(ev.localCameraX)||!Float.isFinite(ev.localCameraY)||!Float.isFinite(ev.localCameraZ))return;'),
+              ('if(len<0.02f)continue;','if(!Float.isFinite(len)||len<0.02f)continue;')])
           p=Path('app/build.gradle')
           s=p.read_text().replace('versionCode 132','versionCode 133').replace('0.29.1-bounded-semantic-finalization','0.29.2-scanner-regression-fix')
           p.write_text(s)
