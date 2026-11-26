@@ -105,8 +105,14 @@ jobs:
               ('if(ev.timestampNs>0&&meta.timestampNs>0&&Math.abs(ev.timestampNs-meta.timestampNs)>350_000_000L)return;','if(ev.timestampNs>0&&meta.timestampNs>0&&Math.abs(ev.timestampNs-meta.timestampNs)>150_000_000L)return;'),
               ('int mx=frame.maskX(u),my=frame.maskY(v),','int mx=frame.maskX(u*frame.sourceWidth/meta.width),my=frame.maskY(v*frame.sourceHeight/meta.height),'),
               ('if(lab==SemanticLabel.UNKNOWN||lab==SemanticLabel.PERSON){ids[i]=-2;continue;}','if(lab==SemanticLabel.UNKNOWN||lab==SemanticLabel.PERSON||lab==SemanticLabel.OBJECT){ids[i]=-2;continue;}')])
+          edit('reconstruction/SemanticFurniturePromoter.java',[
+              ('case MICROWAVE:case STOVE:case DISHWASHER:case TELEVISION:return FurnitureItem.Type.APPLIANCE;','case TELEVISION:return FurnitureItem.Type.TV;\n            case MICROWAVE:case STOVE:case DISHWASHER:return FurnitureItem.Type.APPLIANCE;'),
+              ('case SINK:case TOILET:case SHOWER:case BATHTUB:return FurnitureItem.Type.SANITARY;','case SINK:return FurnitureItem.Type.SINK;\n            case TOILET:return FurnitureItem.Type.TOILET;\n            case SHOWER:return FurnitureItem.Type.SHOWER;\n            case BATHTUB:return FurnitureItem.Type.BATHTUB;'),
+              ('case CURTAIN:case LAMP:case COMPUTER:case OBJECT:return FurnitureItem.Type.CUSTOM;','case CURTAIN:case LAMP:case COMPUTER:return FurnitureItem.Type.CUSTOM;\n            case OBJECT:return null;'),
+              ('double x=e.centerX(),z=e.centerZ();','double x=e.centerX(),z=e.centerZ();\n            if(!Double.isFinite(x)||!Double.isFinite(z)||!Double.isFinite(e.minY)||!Double.isFinite(w)||!Double.isFinite(d)||!Double.isFinite(h)||!Double.isFinite(e.rotationDeg)||!Double.isFinite(plan.floorY))continue;'),
+              ('if(e.type==SemanticEntity.Type.MIRROR||e.type==SemanticEntity.Type.SHELF||e.type==SemanticEntity.Type.TELEVISION||e.type==SemanticEntity.Type.RADIATOR)f.placement="WALL";','f.placement=(e.type==SemanticEntity.Type.MIRROR||e.type==SemanticEntity.Type.SHELF||e.type==SemanticEntity.Type.TELEVISION||e.type==SemanticEntity.Type.RADIATOR)?"WALL":"FLOOR";')])
           p=Path('app/build.gradle')
-          s=p.read_text().replace('versionCode 132','versionCode 138').replace('0.29.1-bounded-semantic-finalization','0.29.7-semantic-registration')
+          s=p.read_text().replace('versionCode 132','versionCode 139').replace('0.29.1-bounded-semantic-finalization','0.29.8-object-promotion')
           p.write_text(s)
           PY
       - name: Install required Android SDK packages
