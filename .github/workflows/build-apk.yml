@@ -38,6 +38,36 @@ jobs:
           fi
           test -f settings.gradle
           test -f app/build.gradle
+      - name: Apply scanner regression fixes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('app/src/main/java/com/elektoryk/scan')
+          def edit(rel, pairs):
+              p=root/rel
+              s=p.read_text()
+              for a,b in pairs:
+                  assert s.count(a)==1, (rel,a)
+                  s=s.replace(a,b)
+              p.write_text(s)
+          edit('scanner/ar/DepthSurfaceTracker.java',[
+              ('ensureFitWorkspace(f.indices.length);','ensureFitWorkspace(f.count);'),
+              ('for(int q:f.indices){','for(int ii=0;ii<f.count;ii++){\n            int q=f.indices[ii];\n            if(q<0||q>=ev.pointCount||q>=xyz.length/3)continue;'),
+              ('ensureFitIndexWorkspace(bestCount);','ensureFitIndexWorkspace(n);')])
+          edit('scanner/ar/ArSurfaceGridRenderer.java',[
+              ('if(focus==SemanticLabel.OBJECT&&semanticFocusShare<0.58f)focus=SemanticLabel.UNKNOWN;','if(focus==SemanticLabel.OBJECT)focus=SemanticLabel.UNKNOWN;'),
+              ('if(focus.objectLike&&!focus.isOpening()&&!focus.isRoomEnvelope())return activeSurfaceWorkspace;','if(focus.objectLike&&!focus.isOpening()&&!focus.isRoomEnvelope())focus=SemanticLabel.UNKNOWN;'),
+              ('stableWalls>=3&&stableWalls<=6&&stableHorizontals>=1','stableWalls>=3&&stableHorizontals>=1')])
+          edit('ui/ArCoreScanActivity.java',[
+              ('progress.setProgress(st.scanQualityPercent);','progress.setProgress(gridStats.stableWalls<3?Math.min(49,st.scanQualityPercent):Math.min(99,st.scanQualityPercent));'),
+              ('if(sem!=null&&sem.modelState==com.elektoryk.scan.semantic.SemanticModelManager.State.READY&&sem.lookingAtShare>=0.34f&&sem.lookingAt.objectLike&&!sem.lookingAt.isOpening()){','if(gridStats.stableWalls<3){\n                        hint.setText("Ще не готово: підтверджено стін "+gridStats.stableWalls+". Повільно пройди вздовж стін, покажи стики з підлогою та верхні кути. Зміщуй телефон убік, а не лише обертай.");\n                    }else if(sem!=null&&sem.modelState==com.elektoryk.scan.semantic.SemanticModelManager.State.READY&&sem.lookingAt!=SemanticLabel.OBJECT&&sem.lookingAtShare>=0.34f&&sem.lookingAt.objectLike&&!sem.lookingAt.isOpening()){'),
+              ('if(heldReady)\n                    scanButton.setText("Завершити • стабільний скан ✓");','if(heldReady){\n                    progress.setProgress(100);\n                    hint.setText("Скан готовий до аналізу. Можна завершувати.");\n                    scanButton.setText("Завершити • стабільний скан ✓");\n                }'),
+              ('"Завершити скан і проаналізувати");\n            });','"Доскануй • або завершити чернетку");\n            });'),
+              ('}catch(Exception e){\n            runOnUiThread(() -> {if(!activityDestroyed&&!isFinishing()&&!isDestroyed())status.setText("AR frame error: "+e.getClass().getSimpleName());});','}catch(Exception e){\n            android.util.Log.e("ElektorykScan","AR frame processing failed",e);\n            runOnUiThread(() -> {if(!activityDestroyed&&!isFinishing()&&!isDestroyed())status.setText("AR frame error: "+e.getClass().getSimpleName());});')])
+          p=Path('app/build.gradle')
+          s=p.read_text().replace('versionCode 132','versionCode 133').replace('0.29.1-bounded-semantic-finalization','0.29.2-scanner-regression-fix')
+          p.write_text(s)
+          PY
       - name: Install required Android SDK packages
         run: |
           SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
