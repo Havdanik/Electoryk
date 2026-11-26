@@ -68,8 +68,18 @@ jobs:
               ('return refine(xyz,idx,m,cameraY);','Fit result=refine(xyz,idx,m,cameraY);\n        if(result!=null)return result;\n        // Reject only this candidate, not the remaining frame. Bound retries.\n        for(int ii=0;ii<m;ii++)available[idx[ii]]=false;\n        return pass<MAX_PLANES_PER_FRAME+2?fitBest(xyz,n,available,cameraY,frameId,pass+1):null;'),
               ('if(ev==null||ev.localXyz==null||ev.pointCount<MIN_FRAME_INLIERS)return;','if(ev==null||ev.localXyz==null||ev.pointCount<MIN_FRAME_INLIERS)return;\n        if(!Float.isFinite(ev.localCameraX)||!Float.isFinite(ev.localCameraY)||!Float.isFinite(ev.localCameraZ))return;'),
               ('if(len<0.02f)continue;','if(!Float.isFinite(len)||len<0.02f)continue;')])
+          edit('semantic/SemanticSceneTracker.java',[
+              ('if(lab==SemanticLabel.UNKNOWN||lab==SemanticLabel.PERSON)continue;','if(lab==SemanticLabel.UNKNOWN||lab==SemanticLabel.PERSON||lab==SemanticLabel.OBJECT)continue;'),
+              ('if(depth<0.20f||depth>6.5f)continue;','if(!finite(depth)||depth<0.20f||depth>6.5f)continue;'),
+              ('if(u<0||v<0||u>=meta.width||v>=meta.height)continue;','if(!finite(u)||!finite(v)||u<0||v<0||u>=meta.width||v>=meta.height)continue;')])
+          edit('semantic/IndoorSemanticSegmenter.java',[
+              ('if(interpreter==null||argb==null||sw<=0||sh<=0)return null;','if(interpreter==null||argb==null||sw<=0||sh<=0||(long)sw*sh>argb.length)return null;'),
+              ('if(ow<=0||oh<=0)return null;','if(ow<=0||oh<=0)return null;\n        if(logits&&classes!=(loadedFlavor==SemanticModelManager.Flavor.ML_PERF_32?32:151))return null;'),
+              ('SemanticLabel.fromModelIndex(best,loadedFlavor),share','SemanticLabel.fromModelIndex(best,loadedFlavor)==SemanticLabel.OBJECT?SemanticLabel.UNKNOWN:SemanticLabel.fromModelIndex(best,loadedFlavor),share')])
+          edit('ui/ArCoreScanActivity.java',[
+              ('ai="AI"+modelTag+": "+sem.lookingAt.ua+" "+Math.round(sem.lookingAtShare*100f)+"%"+dims+" • об\'єктів "+sem.entities;','ai="AI"+modelTag+": "+sem.lookingAt.ua+" • частка маски "+Math.round(sem.lookingAtShare*100f)+"%"+dims+" • сутностей "+sem.entities+(modelTag.equals("32")?" • обмежені класи":"");')])
           p=Path('app/build.gradle')
-          s=p.read_text().replace('versionCode 132','versionCode 133').replace('0.29.1-bounded-semantic-finalization','0.29.2-scanner-regression-fix')
+          s=p.read_text().replace('versionCode 132','versionCode 134').replace('0.29.1-bounded-semantic-finalization','0.29.3-semantic-evidence')
           p.write_text(s)
           PY
       - name: Install required Android SDK packages
