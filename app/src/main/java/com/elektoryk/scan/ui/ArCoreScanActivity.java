@@ -942,7 +942,7 @@ public class ArCoreScanActivity extends Activity implements GLSurfaceView.Render
                                 dims=String.format(java.util.Locale.US," • ~%.2f×%.2f",sem.targetWidthM,sem.targetHeightM);
                                 if(sem.lookingAt.objectLike&&sem.targetDepthM>0.10)dims+=String.format(java.util.Locale.US,"×%.2f м",sem.targetDepthM);else dims+=" м";
                             }
-                            String modelTag=sem.modelFlavor==com.elektoryk.scan.semantic.SemanticModelManager.Flavor.TF_DEEPLAB_ADE151?"150":"32";
+                            String modelTag=sem.modelFlavor==com.elektoryk.scan.semantic.SemanticModelManager.Flavor.TF_DEEPLAB_ADE151?"150":"32 (базові класи)";
                             ai="AI"+modelTag+": "+sem.lookingAt.ua+" "+Math.round(sem.lookingAtShare*100f)+"%"+dims+" • об'єктів "+sem.entities;
                         }else if(sem.modelState==com.elektoryk.scan.semantic.SemanticModelManager.State.ERROR)ai="AI: модель недоступна • геометричний режим";
                     }

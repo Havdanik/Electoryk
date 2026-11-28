@@ -29,8 +29,23 @@ public final class IndoorSemanticSegmenter implements AutoCloseable {
         try(FileInputStream in=new FileInputStream(model);FileChannel ch=in.getChannel()){
             java.nio.MappedByteBuffer map=ch.map(FileChannel.MapMode.READ_ONLY,0,ch.size());
             Interpreter.Options opt=new Interpreter.Options();opt.setNumThreads(4);
-            interpreter=new Interpreter(map,opt);loadedFile=model;loadedFlavor=flavor;return true;
+            interpreter=new Interpreter(map,opt);
+            if(!compatibleModel(interpreter,flavor)){close();return false;}
+            loadedFile=model;loadedFlavor=flavor;return true;
         }catch(Throwable t){close();return false;}
+    }
+
+    private static boolean compatibleModel(Interpreter model,SemanticModelManager.Flavor flavor){
+        Tensor input=model.getInputTensor(0),output=model.getOutputTensor(0);
+        int[] in=input.shape(),out=output.shape();
+        if(in.length!=4||in[0]!=1||in[3]!=3||in[1]<=0||in[2]<=0||in[1]>2048||in[2]>2048
+                ||input.dataType()!=DataType.FLOAT32)return false;
+        if(out.length!=3&&out.length!=4)return false;
+        if(out[0]!=1||out[1]<=0||out[2]<=0)return false;
+        if(out.length==4&&(out[3]<=0||out[3]>1&&out[3]!=(flavor==SemanticModelManager.Flavor.ML_PERF_32?32:151)))return false;
+        int bytes=bytesPer(output.dataType());if(bytes<=0)return false;
+        long elements=1;for(int n:out){if(n<=0)return false;elements*=n;if(elements>256_000_000L/bytes)return false;}
+        return true;
     }
 
     public synchronized SemanticFrame segment(int[] argb,int sw,int sh,long timestampNs){

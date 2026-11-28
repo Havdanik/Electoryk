@@ -36,6 +36,7 @@ public final class IndoorSemanticSystem implements AutoCloseable {
     private volatile long lastSubmittedTimestampNs;
     private volatile long lastCompletedTimestampNs;
     private volatile int consecutiveInferenceFailures;
+    private volatile SemanticModelManager.Flavor failingFlavor=SemanticModelManager.Flavor.NONE;
     private final AtomicBoolean closed=new AtomicBoolean(false);
     private volatile boolean flushTimedOut;
     // Scan-session epoch. An inference can outlive resetPass(); without an epoch guard its old
@@ -45,7 +46,7 @@ public final class IndoorSemanticSystem implements AutoCloseable {
     public IndoorSemanticSystem(Context c){models=new SemanticModelManager(c.getApplicationContext());models.ensureAsync();}
     public void reset(){
         generation.incrementAndGet();
-        tracker.reset();lastSubmittedTimestampNs=0;lastCompletedTimestampNs=0;consecutiveInferenceFailures=0;flushTimedOut=false;
+        tracker.reset();lastSubmittedTimestampNs=0;lastCompletedTimestampNs=0;consecutiveInferenceFailures=0;failingFlavor=SemanticModelManager.Flavor.NONE;flushTimedOut=false;
     }
     /** Tracking loss must not leave a stale WALL/DOOR label steering the recovered overlay. */
     public void invalidateLiveFocus(){tracker.invalidateLiveFocus();}
@@ -63,24 +64,44 @@ public final class IndoorSemanticSystem implements AutoCloseable {
         final int[] inferencePixels=argb;
         final long submitGeneration=generation.get();
         try{
-            ai.submit(()->{try{
-                if(!segmenter.ensureLoaded(models.file(),models.flavor())){if(submitGeneration==generation.get())consecutiveInferenceFailures++;return;}
-                SemanticFrame f=segmenter.segment(inferencePixels,w,h,ts);
-                if(f!=null&&submitGeneration==generation.get()&&ts>=lastCompletedTimestampNs){
-                    tracker.integrate(f,meta,ev);lastCompletedTimestampNs=ts;consecutiveInferenceFailures=0;
-                } else if(f==null&&submitGeneration==generation.get())consecutiveInferenceFailures++;
-            }catch(Throwable ignored){
-                // A failure from an obsolete scan must not poison the freshly reset scan epoch.
-                if(submitGeneration==generation.get()){
-                    consecutiveInferenceFailures++;
-                    // Recover from a poisoned/interrupted interpreter rather than remaining permanently busy/broken.
-                    if(consecutiveInferenceFailures>=3){try{segmenter.close();}catch(Throwable ignored2){}consecutiveInferenceFailures=0;}
-                }
-            }finally{busy.set(false);}});
+            ai.submit(()->{
+                // Select the file and its label mapping together. A background full-model upgrade
+                // must not pair the old fallback file with the new 151-class flavor (or vice versa).
+                SemanticModelManager.Active active=null;
+                try{
+                    active=models.active();
+                    if(active.flavor==SemanticModelManager.Flavor.NONE)return;
+                    if(!segmenter.ensureLoaded(active.file,active.flavor)){
+                        inferenceFailed(active.flavor,submitGeneration);return;
+                    }
+                    SemanticFrame f=segmenter.segment(inferencePixels,w,h,ts);
+                    if(f!=null&&submitGeneration==generation.get()&&ts>=lastCompletedTimestampNs){
+                        tracker.integrate(f,meta,ev);lastCompletedTimestampNs=ts;
+                        consecutiveInferenceFailures=0;failingFlavor=SemanticModelManager.Flavor.NONE;
+                    } else if(f==null)inferenceFailed(active.flavor,submitGeneration);
+                }catch(Throwable ignored){
+                    // A failure from an obsolete scan must not poison the freshly reset scan epoch.
+                    inferenceFailed(active==null?SemanticModelManager.Flavor.NONE:active.flavor,submitGeneration);
+                }finally{busy.set(false);}});
         }catch(java.util.concurrent.RejectedExecutionException rejected){
             // close() can win the race after the closed check. Never leave the semantic system
             // permanently "busy" because a lifecycle-time submit was rejected.
             busy.set(false);
+        }
+    }
+    private void inferenceFailed(SemanticModelManager.Flavor flavor,long submitGeneration){
+        if(submitGeneration!=generation.get()||flavor==SemanticModelManager.Flavor.NONE)return;
+        if(failingFlavor!=flavor){failingFlavor=flavor;consecutiveInferenceFailures=0;}
+        consecutiveInferenceFailures++;
+        // The first retry may recover from a transient interpreter fault. Recreate it once;
+        // after repeated failures quarantine the incompatible model and try the other flavor.
+        if(consecutiveInferenceFailures==2){try{segmenter.close();}catch(Throwable ignored){}}
+        if(consecutiveInferenceFailures>=4){
+            if(submitGeneration!=generation.get())return;
+            try{segmenter.close();}catch(Throwable ignored){}
+            tracker.invalidateLiveFocus();
+            models.markUnusable(flavor);models.ensureAsync();
+            consecutiveInferenceFailures=0;failingFlavor=SemanticModelManager.Flavor.NONE;
         }
     }
     public Snapshot snapshot(){SemanticSceneTracker.Snapshot t=tracker.snapshot();Snapshot s=new Snapshot();s.modelState=models.state();s.modelFlavor=models.flavor();s.modelError=models.error();s.lookingAt=t.centerLabel;s.lookingAtShare=t.centerShare;s.entities=t.entityCount;s.walls=t.wallCount;s.doors=t.doorCount;s.windows=t.windowCount;s.objects=t.objectCount;s.lastSemanticTimestampNs=t.lastSemanticTimestampNs;s.targetWidthM=t.targetWidthM;s.targetHeightM=t.targetHeightM;s.targetDepthM=t.targetDepthM;s.targetConfidence=t.targetConfidence;s.busy=busy.get();return s;}

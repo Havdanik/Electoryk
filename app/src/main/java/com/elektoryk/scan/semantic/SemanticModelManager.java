@@ -24,6 +24,11 @@ import java.util.concurrent.RejectedExecutionException;
 public final class SemanticModelManager implements AutoCloseable {
     public enum State { MISSING, DOWNLOADING, READY, ERROR }
     public enum Flavor { TF_DEEPLAB_ADE151, ML_PERF_32, NONE }
+    public static final class Active {
+        public final File file;
+        public final Flavor flavor;
+        private Active(File file,Flavor flavor){this.file=file;this.flavor=flavor;}
+    }
 
     public static final String FULL_MODEL_URL=
             "https://tfhub.dev/sayakpaul/deeplabv3-mobilenetv2-ade20k/1/default/2?lite-format=tflite";
@@ -42,6 +47,10 @@ public final class SemanticModelManager implements AutoCloseable {
     private volatile long lastAttemptMs;
     private volatile boolean downloading;
     private volatile boolean closed;
+    // A file may have a valid TFL3 header but still be incompatible with this device/runtime.
+    // Quarantine it for this process so a bad primary cannot shadow a usable fallback forever.
+    private boolean fullUnusable;
+    private volatile boolean fallbackUnusable;
 
     public SemanticModelManager(Context c){
         File d=new File(c.getFilesDir(),"models");if(!d.exists())d.mkdirs();
@@ -52,10 +61,24 @@ public final class SemanticModelManager implements AutoCloseable {
     }
 
     public synchronized File file(){refreshActive();return flavor==Flavor.TF_DEEPLAB_ADE151?fullFile:(flavor==Flavor.ML_PERF_32?fallbackFile:null);}
+    public synchronized Active active(){refreshActive();return new Active(flavor==Flavor.TF_DEEPLAB_ADE151?fullFile:(flavor==Flavor.ML_PERF_32?fallbackFile:null),flavor);}
     public State state(){return state;}
     public Flavor flavor(){return flavor;}
     public String error(){return error;}
     public synchronized boolean ready(){refreshActive();return flavor!=Flavor.NONE;}
+
+    public synchronized void markUnusable(Flavor failed){
+        if(closed||failed==Flavor.NONE)return;
+        if(failed==Flavor.TF_DEEPLAB_ADE151)fullUnusable=true;
+        else if(failed==Flavor.ML_PERF_32)fallbackUnusable=true;
+        error=failed==Flavor.TF_DEEPLAB_ADE151
+                ?"full ADE20K model incompatible; trying 32-class fallback"
+                :"32-class fallback model incompatible";
+        refreshActive();
+        if(flavor==Flavor.NONE)state=State.ERROR;
+        // A failed full model must not delay the fallback behind the normal retry cooldown.
+        lastAttemptMs=0;
+    }
 
     /**
      * Starts/continues model provisioning. If the 32-class fallback is already installed,
@@ -64,21 +87,24 @@ public final class SemanticModelManager implements AutoCloseable {
     public synchronized void ensureAsync(){
         refreshActive();
         if(closed||flavor==Flavor.TF_DEEPLAB_ADE151||downloading)return;
+        if(fullUnusable&&fallbackUnusable){state=State.ERROR;return;}
+        if(fullUnusable&&flavor==Flavor.ML_PERF_32)return;
         long now=System.currentTimeMillis();
         if((state==State.ERROR&&now-lastAttemptMs<60_000L)||(flavor==Flavor.ML_PERF_32&&now-lastAttemptMs<3_600_000L))return;
         lastAttemptMs=now;downloading=true;
         final boolean hasFallback=flavor==Flavor.ML_PERF_32;
+        final boolean skipFull=fullUnusable;
         if(!hasFallback)state=State.DOWNLOADING;
-        error="";
+        if(!skipFull)error="";
         try{io.submit(()->{
-            String fullErr="";
-            try{
+            String fullErr=skipFull?"full model rejected in this scan session":"";
+            if(!skipFull)try{
                 downloadModel(FULL_MODEL_URL,fullFile);
             }catch(Throwable t){fullErr=shortError(t);}
             synchronized(SemanticModelManager.this){refreshActive();}
-            if(!isValidTflite(fullFile)){
+            if(skipFull||!isValidTflite(fullFile)){
                 // If there is no reusable fallback, obtain the known MLPerf one.
-                if(!isValidTflite(fallbackFile)){
+                if(!fallbackUnusable&&!isValidTflite(fallbackFile)){
                     try{downloadModel(FALLBACK_MODEL_URL,fallbackFile);}catch(Throwable t){
                         String e=shortError(t);
                         synchronized(SemanticModelManager.this){
@@ -99,8 +125,8 @@ public final class SemanticModelManager implements AutoCloseable {
     }
 
     private void refreshActive(){
-        if(isValidTflite(fullFile)){flavor=Flavor.TF_DEEPLAB_ADE151;state=State.READY;return;}
-        if(isValidTflite(fallbackFile)){flavor=Flavor.ML_PERF_32;state=State.READY;return;}
+        if(!fullUnusable&&isValidTflite(fullFile)){flavor=Flavor.TF_DEEPLAB_ADE151;state=State.READY;return;}
+        if(!fallbackUnusable&&isValidTflite(fallbackFile)){flavor=Flavor.ML_PERF_32;state=State.READY;return;}
         flavor=Flavor.NONE;if(!downloading&&state!=State.ERROR)state=State.MISSING;
     }
 

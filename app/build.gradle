@@ -10,8 +10,8 @@ android {
         applicationId "com.elektoryk.scan"
         minSdk 26
         targetSdk 34
-        versionCode 135
-        versionName "0.29.4-aspect-safe-semantics"
+        versionCode 136
+        versionName "0.29.5-semantic-model-recovery"
     }
 
     buildTypes {
