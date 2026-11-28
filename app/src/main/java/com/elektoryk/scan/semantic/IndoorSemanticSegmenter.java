@@ -34,20 +34,38 @@ public final class IndoorSemanticSegmenter implements AutoCloseable {
     }
 
     public synchronized SemanticFrame segment(int[] argb,int sw,int sh,long timestampNs){
-        if(interpreter==null||argb==null||sw<=0||sh<=0)return null;
+        if(interpreter==null||argb==null||sw<=0||sh<=0||(long)sw*sh>argb.length)return null;
         Tensor inT=interpreter.getInputTensor(0);int[] is=inT.shape();
-        if(is.length<4||is[is.length-1]!=3)return null;int ih=is[1],iw=is[2];
+        if(is.length!=4||is[0]!=1||is[3]!=3)return null;int ih=is[1],iw=is[2];
+        if(iw<=0||ih<=0||iw>2048||ih>2048)return null;
         if(inT.dataType()!=DataType.FLOAT32)return null; // both bundled download choices expose float RGB input
         int inputBytes=iw*ih*3*4;
         ByteBuffer input=buffer(true,inputBytes);
         // TensorFlow DeepLab MobileNetV2 ADE20K exports use MobileNet-style [-1,1] RGB preprocessing.
+        // Camera keyframes are generally landscape while both models expect a square image.
+        // Preserve the aspect ratio: a stretched sofa/window can change class entirely, and
+        // stretching also invalidates the mask-to-Depth projection in SemanticSceneTracker.
+        final float scale=Math.min(iw/(float)sw,ih/(float)sh);
+        final float left=(iw-sw*scale)*0.5f,top=(ih-sh*scale)*0.5f;
+        final float right=left+sw*scale,bottom=top+sh*scale;
         for(int y=0;y<ih;y++){
-            int sy=Math.min(sh-1,(int)((y+0.5f)*sh/ih));
+            float py=y+0.5f;
             for(int x=0;x<iw;x++){
-                int sx=Math.min(sw-1,(int)((x+0.5f)*sw/iw));int c=argb[sy*sw+sx];
-                input.putFloat((((c>>16)&255)-127.5f)/127.5f);
-                input.putFloat((((c>>8)&255)-127.5f)/127.5f);
-                input.putFloat(((c&255)-127.5f)/127.5f);
+                float px=x+0.5f;
+                if(px<left||px>=right||py<top||py>=bottom){
+                    input.putFloat(-1f);input.putFloat(-1f);input.putFloat(-1f);continue;
+                }
+                float sx=(px-left)/scale-0.5f,sy=(py-top)/scale-0.5f;
+                int x0=(int)Math.floor(sx),y0=(int)Math.floor(sy);
+                float ax=sx-x0,ay=sy-y0;
+                int ix0=Math.max(0,Math.min(sw-1,x0)),ix1=Math.max(0,Math.min(sw-1,x0+1));
+                int iy0=Math.max(0,Math.min(sh-1,y0)),iy1=Math.max(0,Math.min(sh-1,y0+1));
+                int c00=argb[iy0*sw+ix0],c10=argb[iy0*sw+ix1];
+                int c01=argb[iy1*sw+ix0],c11=argb[iy1*sw+ix1];
+                float w00=(1f-ax)*(1f-ay),w10=ax*(1f-ay),w01=(1f-ax)*ay,w11=ax*ay;
+                input.putFloat((w00*((c00>>16)&255)+w10*((c10>>16)&255)+w01*((c01>>16)&255)+w11*((c11>>16)&255)-127.5f)/127.5f);
+                input.putFloat((w00*((c00>>8)&255)+w10*((c10>>8)&255)+w01*((c01>>8)&255)+w11*((c11>>8)&255)-127.5f)/127.5f);
+                input.putFloat((w00*(c00&255)+w10*(c10&255)+w01*(c01&255)+w11*(c11&255)-127.5f)/127.5f);
             }
         }
         input.rewind();
@@ -81,7 +99,11 @@ public final class IndoorSemanticSegmenter implements AutoCloseable {
         byte[] mask=new byte[MASK_W*MASK_H];int maxLabels=loadedFlavor==SemanticModelManager.Flavor.ML_PERF_32?32:151;
         int[] centerCounts=new int[maxLabels];int centerTotal=0;
         for(int y=0;y<MASK_H;y++)for(int x=0;x<MASK_W;x++){
-            int ox=Math.min(ow-1,(int)((x+0.5f)*ow/MASK_W));int oy=Math.min(oh-1,(int)((y+0.5f)*oh/MASK_H));
+            // Undo the input padding before exposing the fixed-size mask. The tracker projects
+            // camera/Depth points into this source-frame mask, so letterbox pixels must not shift it.
+            float sourceX=(x+0.5f)*sw/MASK_W,sourceY=(y+0.5f)*sh/MASK_H;
+            int ox=Math.max(0,Math.min(ow-1,(int)((left+sourceX*scale)*ow/iw)));
+            int oy=Math.max(0,Math.min(oh-1,(int)((top+sourceY*scale)*oh/ih)));
             int lab=dense[oy*ow+ox];if(lab<0||lab>=maxLabels)lab=loadedFlavor==SemanticModelManager.Flavor.ML_PERF_32?31:0;
             mask[y*MASK_W+x]=(byte)lab;
             if(x>=MASK_W*0.30&&x<MASK_W*0.70&&y>=MASK_H*0.30&&y<MASK_H*0.70){centerCounts[lab]++;centerTotal++;}
