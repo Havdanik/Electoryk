@@ -6,6 +6,7 @@ import com.elektoryk.scan.model.PlanWallSegment;
 import com.elektoryk.scan.model.SemanticEntity;
 import com.elektoryk.scan.semantic.SemanticLabel;
 import com.elektoryk.scan.semantic.SemanticSceneTracker;
+import com.elektoryk.scan.scanner.ar.ScanVisualKeyframeRecorder;
 import com.google.ar.core.Pose;
 
 import java.util.ArrayList;
@@ -51,13 +52,25 @@ public final class SemanticPlanFuser {
     }
 
     private void classifyExisting(ApartmentOpening o,List<SemanticSceneTracker.Record> records,double yaw,ApartmentPlan plan){
-        if(o==null)return;int doors=0,windows=0,total=0;
+        if(o==null||o.manualEdited)return;
+        int doors=0,windows=0;
+        ScanVisualKeyframeRecorder.Meta lastDoorView=null,lastWindowView=null;
         double floor=plan.floorY,cy=(o.bottomY+o.topY)*0.5;
         if(o.topY<=o.bottomY)cy=floor+1.1;
         double[][] samples={{o.centerX(),cy,o.centerZ()},{o.centerX(),floor+0.5,o.centerZ()},{o.centerX(),floor+1.7,o.centerZ()}};
         for(SemanticSceneTracker.Record r:records){
             if(r==null||r.frame==null||r.meta==null)continue;
-            for(double[] p:samples){SemanticLabel lab=labelAtNormalizedPoint(r,p[0],p[1],p[2],yaw);if(lab==SemanticLabel.UNKNOWN)continue;total++;if(lab==SemanticLabel.DOOR)doors++;if(lab==SemanticLabel.WINDOW)windows++;}
+            int doorPixels=0,windowPixels=0;
+            for(double[] p:samples){SemanticLabel lab=labelAtNormalizedPoint(r,p[0],p[1],p[2],yaw);
+                if(lab==SemanticLabel.DOOR)doorPixels++;else if(lab==SemanticLabel.WINDOW)windowPixels++;
+            }
+            // Three projected sample points in ONE image are correlated, not three independent
+            // confirmations. Count at most one vote per frame and require a changed camera view.
+            if(doorPixels>windowPixels&&distinctView(lastDoorView,r.meta)){
+                doors++;lastDoorView=r.meta;
+            }else if(windowPixels>doorPixels&&distinctView(lastWindowView,r.meta)){
+                windows++;lastWindowView=r.meta;
+            }
         }
         if(doors>=2&&doors>windows){o.type=ApartmentOpening.Type.DOOR;o.confidence=Math.max(o.confidence,Math.min(.96,.55+doors*.05));}
         else if(windows>=2&&windows>doors){o.type=ApartmentOpening.Type.WINDOW;o.external=true;o.roomBId="";o.confidence=Math.max(o.confidence,Math.min(.96,.55+windows*.05));}
@@ -72,7 +85,9 @@ public final class SemanticPlanFuser {
 
     /** Project coherent semantic door/window components onto the nearest reconstructed wall. */
     private void addVisualOpenings(ApartmentPlan plan,List<SemanticSceneTracker.Record> records,double yaw,SemanticLabel target){
+        List<VisualOpeningEvidence> candidates=new ArrayList<>();
         for(SemanticSceneTracker.Record r:records){
+            if(r==null||r.frame==null||r.meta==null||r.meta.timestampNs<=0)continue;
             int rawTarget=SemanticLabel.modelIndexFor(target,r.frame.flavor);
             if(rawTarget<0)continue;
             for(MaskBox b:maskBoxes(r,rawTarget)){
@@ -86,17 +101,67 @@ public final class SemanticPlanFuser {
                 double width=Math.hypot(hr.x-hl.x,hr.z-hl.z),height=Math.abs(ht.y-hb.y);
                 if(target==SemanticLabel.DOOR){if(width<.45||width>2.3||height<1.25||height>3.0)continue;}
                 else {if(width<.30||width>3.8||height<.25||height>2.8)continue;}
-                ApartmentOpening.Type type=target==SemanticLabel.DOOR?ApartmentOpening.Type.DOOR:ApartmentOpening.Type.WINDOW;
-                if(hasOpeningNear(plan,hc.x,hc.z,type,.65))continue;
-                ApartmentOpening o=new ApartmentOpening();o.wallId=wall.id;o.type=type;
-                o.x1=hl.x;o.z1=hl.z;o.x2=hr.x;o.z2=hr.z;o.widthM=width;o.bottomY=Math.min(ht.y,hb.y);o.topY=Math.max(ht.y,hb.y);o.heightM=height;o.confidence=.78;
-                o.orientation=orientationOf(wall);
-                if(o.type==ApartmentOpening.Type.DOOR&&o.bottomY>plan.floorY+.35)o.bottomY=plan.floorY;
-                bindOpeningToRooms(plan,o,wall);
-                if(o.type==ApartmentOpening.Type.WINDOW){o.external=true;o.roomBId="";}
-                plan.openings.add(o);
+                VisualOpeningEvidence match=null;
+                for(VisualOpeningEvidence candidate:candidates){
+                    if(candidate.matches(wall.id,hc.x,hc.z,width,Math.min(ht.y,hb.y),Math.max(ht.y,hb.y))){match=candidate;break;}
+                }
+                if(match==null)candidates.add(new VisualOpeningEvidence(wall.id,hc.x,hc.z,width,
+                        Math.min(ht.y,hb.y),Math.max(ht.y,hb.y),r.meta));
+                else match.observe(hc.x,hc.z,width,Math.min(ht.y,hb.y),Math.max(ht.y,hb.y),r.meta);
             }
         }
+        for(VisualOpeningEvidence candidate:candidates){
+            if(candidate.views<2)continue;
+            PlanWallSegment wall=wallById(plan,candidate.wallId);if(wall==null)continue;
+            if(hasOpeningNear(plan,candidate.x,candidate.z,target==SemanticLabel.DOOR?ApartmentOpening.Type.DOOR:ApartmentOpening.Type.WINDOW,.65))continue;
+            double length=wall.lengthM();if(length<candidate.width+.10)continue;
+            double ux=(wall.x2-wall.x1)/length,uz=(wall.z2-wall.z1)/length;
+            double along=(candidate.x-wall.x1)*ux+(candidate.z-wall.z1)*uz;
+            along=Math.max(candidate.width*.5+.05,Math.min(length-candidate.width*.5-.05,along));
+            double cx=wall.x1+along*ux,cz=wall.z1+along*uz;
+            ApartmentOpening o=new ApartmentOpening();o.wallId=wall.id;
+            o.type=target==SemanticLabel.DOOR?ApartmentOpening.Type.DOOR:ApartmentOpening.Type.WINDOW;
+            o.x1=cx-ux*candidate.width*.5;o.z1=cz-uz*candidate.width*.5;
+            o.x2=cx+ux*candidate.width*.5;o.z2=cz+uz*candidate.width*.5;
+            o.widthM=candidate.width;o.bottomY=candidate.bottom;o.topY=candidate.top;
+            if(o.type==ApartmentOpening.Type.DOOR&&o.bottomY>plan.floorY+.35)o.bottomY=plan.floorY;
+            o.heightM=o.topY-o.bottomY;o.confidence=Math.min(.88,.68+.05*candidate.views);
+            o.orientation=orientationOf(wall);bindOpeningToRooms(plan,o,wall);
+            if(o.type==ApartmentOpening.Type.WINDOW){o.external=true;o.roomBId="";}
+            plan.openings.add(o);
+        }
+    }
+
+    private static final class VisualOpeningEvidence {
+        final String wallId;
+        double x,z,width,bottom,top;
+        int views=1;
+        ScanVisualKeyframeRecorder.Meta lastView;
+        VisualOpeningEvidence(String wallId,double x,double z,double width,double bottom,double top,ScanVisualKeyframeRecorder.Meta view){
+            this.wallId=wallId;this.x=x;this.z=z;this.width=width;this.bottom=bottom;this.top=top;lastView=view;
+        }
+        boolean matches(String wall,double px,double pz,double w,double low,double high){
+            return wallId.equals(wall)&&Math.hypot(x-px,z-pz)<=Math.min(.45,.25*(width+w))
+                    &&Math.abs(width-w)<=Math.max(.35,.45*Math.max(width,w))
+                    &&Math.abs(bottom-low)<=.55&&Math.abs(top-high)<=.55;
+        }
+        void observe(double px,double pz,double w,double low,double high,ScanVisualKeyframeRecorder.Meta view){
+            if(view.timestampNs<=lastView.timestampNs+250_000_000L||!distinctView(lastView,view))return;
+            x=(x*views+px)/(views+1);z=(z*views+pz)/(views+1);
+            width=(width*views+w)/(views+1);bottom=(bottom*views+low)/(views+1);top=(top*views+high)/(views+1);
+            views++;lastView=view;
+        }
+    }
+
+    private static boolean distinctView(ScanVisualKeyframeRecorder.Meta previous,ScanVisualKeyframeRecorder.Meta current){
+        if(current==null||current.timestampNs<=0)return false;
+        if(previous==null)return true;
+        if(current.timestampNs<=previous.timestampNs+250_000_000L)return false;
+        double dx=current.tx-previous.tx,dy=current.ty-previous.ty,dz=current.tz-previous.tz;
+        if(dx*dx+dy*dy+dz*dz>=.12*.12)return true;
+        double dot=Math.abs(current.qx*previous.qx+current.qy*previous.qy
+                +current.qz*previous.qz+current.qw*previous.qw);
+        return dot<.9975; // About eight degrees of camera rotation.
     }
 
     /** ADE20K is semantic rather than instance segmentation, so split masks into components. */
