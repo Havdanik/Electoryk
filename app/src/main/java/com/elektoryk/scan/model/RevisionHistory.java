@@ -1,0 +1,3 @@
+package com.elektoryk.scan.model;
+import org.json.*;import java.util.*;
+public class RevisionHistory {public String projectId="";public final List<RevisionSummary> revisions=new ArrayList<>();public JSONObject toJson() throws JSONException{JSONObject o=new JSONObject();o.put("projectId",projectId);JSONArray a=new JSONArray();for(RevisionSummary r:revisions)a.put(r.toJson());o.put("revisions",a);return o;}public static RevisionHistory fromJson(JSONObject o){RevisionHistory h=new RevisionHistory();if(o==null)return h;h.projectId=o.optString("projectId","");JSONArray a=o.optJSONArray("revisions");if(a!=null)for(int i=0;i<a.length();i++){RevisionSummary r=RevisionSummary.fromJson(a.optJSONObject(i));if(r!=null)h.revisions.add(r);}return h;}}

@@ -1,0 +1,3 @@
+package com.elektoryk.scan.model;
+import org.json.*;import java.util.*;
+public class EvidenceIndex {public String projectId="";public final List<EvidenceItem> items=new ArrayList<>();public JSONObject toJson() throws JSONException{JSONObject o=new JSONObject();o.put("projectId",projectId);JSONArray a=new JSONArray();for(EvidenceItem e:items)a.put(e.toJson());o.put("items",a);return o;}public static EvidenceIndex fromJson(JSONObject o){EvidenceIndex x=new EvidenceIndex();if(o==null)return x;x.projectId=o.optString("projectId","");JSONArray a=o.optJSONArray("items");if(a!=null)for(int i=0;i<a.length();i++){EvidenceItem e=EvidenceItem.fromJson(a.optJSONObject(i));if(e!=null)x.items.add(e);}return x;}}

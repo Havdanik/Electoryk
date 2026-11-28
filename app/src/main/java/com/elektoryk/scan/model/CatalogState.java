@@ -1,0 +1,3 @@
+package com.elektoryk.scan.model;
+import org.json.*;import java.util.*;
+public class CatalogState {public final java.util.List<CatalogItem> items=new java.util.ArrayList<>();public JSONObject toJson() throws JSONException{JSONObject o=new JSONObject();JSONArray a=new JSONArray();for(CatalogItem i:items)a.put(i.toJson());o.put("items",a);return o;}public static CatalogState fromJson(JSONObject o){CatalogState s=new CatalogState();if(o==null)return s;JSONArray a=o.optJSONArray("items");if(a!=null)for(int x=0;x<a.length();x++){CatalogItem i=CatalogItem.fromJson(a.optJSONObject(x));if(i!=null)s.items.add(i);}return s;}public CatalogItem find(String key){for(CatalogItem i:items)if(i.stableKey.equals(key))return i;return null;}}

@@ -1,0 +1,34 @@
+{
+  "assets": [
+    {
+      "id": "SOCKET_CUSTOM_BLACK_2",
+      "label": "Розетки чорні • 2 пости",
+      "category": "ELECTRICAL",
+      "pointType": "SOCKET",
+      "placement": "WALL",
+      "widthM": 0.16,
+      "depthM": 0.03,
+      "heightM": 0.09
+    },
+    {
+      "id": "LIGHT_CUSTOM_RING",
+      "label": "Підвіс • кільце",
+      "category": "ELECTRICAL",
+      "pointType": "LIGHT",
+      "placement": "CEILING",
+      "widthM": 0.55,
+      "depthM": 0.55,
+      "heightM": 0.35
+    },
+    {
+      "id": "SOFA_CUSTOM_240",
+      "label": "Диван 240 см",
+      "category": "FURNITURE",
+      "furnitureType": "SOFA",
+      "placement": "FLOOR",
+      "widthM": 2.40,
+      "depthM": 0.95,
+      "heightM": 0.82
+    }
+  ]
+}

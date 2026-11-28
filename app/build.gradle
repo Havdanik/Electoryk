@@ -1,0 +1,48 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.elektoryk.scan'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.elektoryk.scan"
+        minSdk 26
+        targetSdk 34
+        versionCode 133
+        versionName "0.29.2-semantic-object-types"
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled false
+        }
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    // Install-compat fallback for Android 15/16 devices that may use 16 KB pages.
+    // AGP 8.2.x only 4 KB-aligns uncompressed JNI libs; legacy packaging compresses
+    // the ARCore .so files so Package Installer extracts them instead of mmap-ing
+    // them directly from the APK. This avoids ZIP page-alignment install failures.
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging true
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+dependencies {
+    // Real ARCore session + Depth API. First Gradle resolve requires internet.
+    implementation 'com.google.ar:core:1.54.0'
+    // On-device indoor scene understanding (DeepLabV3/MobileNetV2 ADE20K).
+    implementation 'org.tensorflow:tensorflow-lite:2.16.1'
+}

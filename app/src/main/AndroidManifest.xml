@@ -1,0 +1,191 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+    <uses-feature
+        android:name="android.hardware.camera.any"
+        android:required="false" />
+
+    <uses-feature
+        android:glEsVersion="0x00030000"
+        android:required="false" />
+
+    <!-- Optional: the app still has a Camera2/IMU fallback. -->
+    <uses-feature
+        android:name="com.google.ar.core.depth"
+        android:required="false" />
+
+    <application
+        android:name=".ElektorykApplication"
+        android:allowBackup="true"
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:theme="@style/AppTheme"
+        android:usesCleartextTraffic="false">
+
+        <meta-data
+            android:name="com.google.ar.core"
+            android:value="optional" />
+
+
+
+
+
+        <provider
+            android:name=".storage.ExportFileProvider"
+            android:authorities="com.elektoryk.scan.exports"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+
+
+
+
+        <service
+            android:name=".audio.ConsultationRecordingService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
+        <activity android:name=".ui.ObjectFlowActivity" android:screenOrientation="portrait" android:exported="false" />
+        <activity android:name=".ui.ClientBriefActivity" android:screenOrientation="portrait" android:exported="false" />
+        <activity android:name=".ui.CrewActivity" android:screenOrientation="portrait" android:exported="false" />
+        <activity android:name=".ui.AssetLibraryActivity" android:screenOrientation="portrait" android:exported="false" />
+        <activity android:name=".ui.ProductCompareActivity" android:screenOrientation="portrait" android:exported="false" />
+        <activity android:name=".ui.EstimateThermalActivity" android:screenOrientation="portrait" android:exported="false" />
+        <activity android:name=".ui.CeilingMarkingActivity" android:screenOrientation="portrait" android:exported="false" />
+        <activity android:name=".ui.ConsultationLogActivity" android:screenOrientation="portrait" android:exported="false" />
+
+        <activity android:name=".ui.GapAuditActivity" android:screenOrientation="portrait" android:exported="false" />
+        <activity android:name=".ui.EstimateActivity" android:screenOrientation="portrait" android:exported="false" />
+        <activity android:name=".ui.RevisionActivity" android:screenOrientation="portrait" android:exported="false" />
+        <activity android:name=".ui.EvidenceActivity" android:screenOrientation="portrait" android:exported="false" />
+        <activity android:name=".ui.ClientApprovalActivity" android:screenOrientation="portrait" android:exported="false" />
+
+        <activity android:name=".ui.WorkflowActivity" android:screenOrientation="portrait" android:exported="false" />
+        <activity android:name=".ui.QualityHubActivity" android:screenOrientation="portrait" android:exported="false" />
+        <activity android:name=".ui.CommissioningActivity" android:screenOrientation="portrait" android:exported="false" />
+        <activity android:name=".ui.DiagnosticsActivity" android:screenOrientation="portrait" android:exported="false" />
+        <activity android:name=".ui.FieldWorkActivity" android:screenOrientation="portrait" android:exported="false" />
+        <activity android:name=".ui.ThermalPrinterActivity" android:screenOrientation="portrait" android:exported="false" />
+        <activity android:name=".ui.CircuitProtectionActivity" android:screenOrientation="portrait" android:exported="false" />
+        <activity android:name=".ui.HandoverActivity" android:screenOrientation="portrait" android:exported="false" />
+        <activity android:name=".ui.ProjectTransferActivity" android:screenOrientation="portrait" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:mimeType="application/vnd.elektoryk.project" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" android:mimeType="*/*" android:pathPattern=".*\.elektoryk" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="file" android:mimeType="*/*" android:pathPattern=".*\.elektoryk" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/vnd.elektoryk.project" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".ui.AccuracyActivity"
+            android:screenOrientation="portrait"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.ClientPresentationActivity"
+            android:screenOrientation="portrait"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.ElectricalCheckActivity"
+            android:screenOrientation="portrait"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.DigitalTwinActivity"
+            android:screenOrientation="portrait"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.ApartmentEditorActivity"
+            android:screenOrientation="portrait"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.RoutingActivity"
+            android:screenOrientation="portrait"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.ApartmentPlanActivity"
+            android:screenOrientation="portrait"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.ScenePreviewActivity"
+            android:screenOrientation="portrait"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.ReviewActivity"
+            android:screenOrientation="portrait"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.ArCoreScanActivity"
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.PlanEditorActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.CalibrationActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.ScanActivity"
+            android:screenOrientation="portrait"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.DeviceProfileActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.AreaCheckActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.ProjectActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

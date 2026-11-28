@@ -1,0 +1,10 @@
+<resources>
+    <color name="black">#0B0B0D</color>
+    <color name="panel">#17171B</color>
+    <color name="panel2">#222229</color>
+    <color name="yellow">#E2B136</color>
+    <color name="white">#F4F4F5</color>
+    <color name="muted">#A4A4AD</color>
+    <color name="danger">#FF5A5F</color>
+    <color name="ok">#39D98A</color>
+</resources>
